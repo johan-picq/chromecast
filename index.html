@@ -6,8 +6,10 @@
     <title>Vite App</title>
   </head>
   <body>
-    <video id="content" src="./video.mp4" width="500" controls type="video/mp4"></video>
+    <div class="video-container">
+      <video id="content" src="http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4" width="500" controls type="video/mp4"></video>
       <google-cast-launcher id="cast_button" style="display: block; width: 50px;"></google-cast-launcher>
+    </div>
     <script src="https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1"></script>
     <script type="module" src="/main.js"></script>
   </body>
