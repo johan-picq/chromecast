@@ -2,14 +2,23 @@ const currentContent = document.querySelector("#content");
 const currentContentId = currentContent.getAttribute("src");
 const currentContentType = currentContent.getAttribute("type");
 const castButton = document.querySelector("#cast_button");
+var muted = false;
 
-const initializeCastSession = (context, playerController) => {
+const initializeCastSession = (context, player, playerController) => {
   console.log("CastContext: CastSession connected");
   var mediaInfo = new chrome.cast.media.MediaInfo(
     currentContentId,
     currentContentType
   );
   var request = new chrome.cast.media.LoadRequest(mediaInfo);
+  request.currentTime = currentContent.currentTime;
+  const localIsPLaying =
+    currentContent.currentTime > 0 &&
+    !currentContent.paused &&
+    !currentContent.ended;
+  if (!localIsPLaying) {
+    request.autoplay = false;
+  }
   var castSession = context.getCurrentSession();
   castSession.loadMedia(request).then(
     function () {
@@ -27,23 +36,19 @@ const initializeCastSession = (context, playerController) => {
   currentContent.addEventListener("pause", () => {
     playerController.playOrPause();
   });
-  currentContent.addEventListener("seek", () => {
+
+  currentContent.addEventListener("seeked", () => {
+    player.currentTime = currentContent.currentTime;
     playerController.seek();
   });
   currentContent.addEventListener("volumechange", () => {
-    console.log("volume change");
-    if (currentContent.muted) {
-      console.log("mute");
-      castSession.setMute(true);
+    if ((currentContent.muted && !muted) || (!currentContent.muted && muted)) {
+      muted = !muted;
+      playerController.muteOrUnmute();
     } else {
-      console.log("unmute");
-      castSession.setMute(false);
+      player.volumeLevel = currentContent.volume;
+      playerController.setVolumeLevel();
     }
-    // castSession.setVolume(currentContent.volume);
-    playerController.setVolumeLevel();
-  });
-  currentContent.addEventListener("ended", () => {
-    playerController.stop();
   });
 };
 
@@ -53,8 +58,7 @@ const initializeCastApi = () => {
   const playerController = new cast.framework.RemotePlayerController(player);
 
   context.setOptions({
-    receiverApplicationId: "B88B034A",
-    autoJoinPolicy: chrome.cast.AutoJoinPolicy.ORIGIN_SCOPED,
+    receiverApplicationId: chrome.cast.media.DEFAULT_MEDIA_RECEIVER_APP_ID,
   });
 
   context.addEventListener(
@@ -62,7 +66,7 @@ const initializeCastApi = () => {
     (event) => {
       switch (event.sessionState) {
         case cast.framework.SessionState.SESSION_STARTED:
-          initializeCastSession(context, playerController);
+          initializeCastSession(context, player, playerController);
           break;
         case cast.framework.SessionState.SESSION_RESUMED:
           console.log("CastContext: CastSession resumed");
@@ -74,22 +78,6 @@ const initializeCastApi = () => {
       }
     }
   );
-
-  // playerController.addEventListener(
-  //   cast.framework.RemotePlayerEventType.MEDIA_INFO_CHANGED,
-  //   () => {
-  //     const session = context.getCurrentSession();
-  //     if (!session) {
-  //       return;
-  //     }
-  //     const mediaStatus = session.getMediaSession();
-  //     if (!mediaStatus) {
-  //       return;
-  //     }
-  //     let mediaInfo = mediaStatus.media;
-  //     console.log("playerController have been change : ", mediaInfo);
-  //   }
-  // );
 };
 
 window["__onGCastApiAvailable"] = function (isAvailable) {
