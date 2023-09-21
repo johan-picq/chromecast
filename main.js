@@ -1,61 +1,73 @@
 const currentContent = document.querySelector("#content");
 const currentContentId = currentContent.getAttribute("src");
 const currentContentType = currentContent.getAttribute("type");
-const castButton = document.querySelector("#cast_button");
-var muted = false;
 
-const initializeCastSession = (context, player, playerController) => {
+var muted = currentContent.muted;
+
+const listenLocalPlayerPlayerEvent = (remotePlayer, remotePlayerController) => {
+  currentContent.addEventListener("play", () => {
+    remotePlayerController.playOrPause();
+  });
+
+  currentContent.addEventListener("pause", () => {
+    remotePlayerController.playOrPause();
+  });
+
+  currentContent.addEventListener("seeked", () => {
+    remotePlayer.currentTime = currentContent.currentTime;
+    remotePlayerController.seek();
+  });
+
+  currentContent.addEventListener("volumechange", () => {
+    if ((currentContent.muted && !muted) || (!currentContent.muted && muted)) {
+      muted = !muted;
+      remotePlayerController.muteOrUnmute();
+    } else {
+      remotePlayer.volumeLevel = currentContent.volume;
+      remotePlayerController.setVolumeLevel();
+    }
+  });
+};
+
+const initializeCastSession = (
+  context,
+  remotePlayer,
+  remotePlayerController
+) => {
   console.log("CastContext: CastSession connected");
+  const localIsPLaying =
+    currentContent.currentTime > 0 &&
+    !currentContent.paused &&
+    !currentContent.ended;
   var mediaInfo = new chrome.cast.media.MediaInfo(
     currentContentId,
     currentContentType
   );
   var request = new chrome.cast.media.LoadRequest(mediaInfo);
+  var castSession = context.getCurrentSession();
+
   request.currentTime = currentContent.currentTime;
-  const localIsPLaying =
-    currentContent.currentTime > 0 &&
-    !currentContent.paused &&
-    !currentContent.ended;
   if (!localIsPLaying) {
     request.autoplay = false;
   }
-  var castSession = context.getCurrentSession();
+
   castSession.loadMedia(request).then(
     function () {
       console.log("Load succeed");
+      listenLocalPlayerPlayerEvent(remotePlayer, remotePlayerController);
     },
     function (errorCode) {
       console.log("Error code: " + errorCode);
     }
   );
-
-  currentContent.addEventListener("play", () => {
-    playerController.playOrPause();
-  });
-
-  currentContent.addEventListener("pause", () => {
-    playerController.playOrPause();
-  });
-
-  currentContent.addEventListener("seeked", () => {
-    player.currentTime = currentContent.currentTime;
-    playerController.seek();
-  });
-  currentContent.addEventListener("volumechange", () => {
-    if ((currentContent.muted && !muted) || (!currentContent.muted && muted)) {
-      muted = !muted;
-      playerController.muteOrUnmute();
-    } else {
-      player.volumeLevel = currentContent.volume;
-      playerController.setVolumeLevel();
-    }
-  });
 };
 
 const initializeCastApi = () => {
   const context = cast.framework.CastContext.getInstance();
-  const player = new cast.framework.RemotePlayer();
-  const playerController = new cast.framework.RemotePlayerController(player);
+  const remotePlayer = new cast.framework.RemotePlayer();
+  const remotePlayerController = new cast.framework.RemotePlayerController(
+    remotePlayer
+  );
 
   context.setOptions({
     receiverApplicationId: chrome.cast.media.DEFAULT_MEDIA_RECEIVER_APP_ID,
@@ -64,17 +76,8 @@ const initializeCastApi = () => {
   context.addEventListener(
     cast.framework.CastContextEventType.SESSION_STATE_CHANGED,
     (event) => {
-      switch (event.sessionState) {
-        case cast.framework.SessionState.SESSION_STARTED:
-          initializeCastSession(context, player, playerController);
-          break;
-        case cast.framework.SessionState.SESSION_RESUMED:
-          console.log("CastContext: CastSession resumed");
-          break;
-        case cast.framework.SessionState.SESSION_ENDED:
-          console.log("CastContext: CastSession disconnected");
-          // Update locally as necessary
-          break;
+      if (event.sessionState === cast.framework.SessionState.SESSION_STARTED) {
+        initializeCastSession(context, remotePlayer, remotePlayerController);
       }
     }
   );
